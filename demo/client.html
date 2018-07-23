@@ -1,0 +1,83 @@
+<html>
+
+<head>
+    <title>WebSocket</title>
+
+    <style>
+        #log {
+            width: 456px;
+            height: 567px;
+            border: 1px solid #232323;
+            border-radius: 5px;
+            padding: 10px;
+        }
+    </style>
+
+    <script>
+        var socket;
+
+        function init() {
+            var host = "ws://localhost:12345";
+
+            socket = new WebSocket(host);
+            log('WebSocket - status ' + socket.readyState);
+
+            socket.onopen = function (msg) {
+                log("WebSocket - status " + this.readyState);
+            };
+            socket.onmessage = function (msg) {
+                log("WebSocket: " + msg.data);
+            };
+            socket.onclose = function (msg) {
+                log("onclose - status " + this.readyState);
+            };
+
+            $("msg").focus();
+        }
+
+        function send() {
+            msg = $("msg").value;
+
+            if (msg === '') {
+                alert()
+            }
+
+            try {
+                socket.send(msg);
+                log('Sent: ' + msg);
+            } catch (ex) {
+                log(ex);
+            }
+        }
+
+        function quit() {
+            log("Goodbye!");
+            socket.close();
+            socket = null;
+        }
+
+        function $(id) {
+            return document.getElementById(id);
+        }
+
+        function log(msg) {
+            $("log").innerHTML += "<br>" + msg;
+        }
+
+        function onkey(event) {
+            if (event.keyCode == 13) {
+                send();
+            }
+        }
+    </script>
+
+</head>
+
+<body onload="init()">
+<div id="log"></div>
+<input id="msg" type="textbox" style="width: 360px;" onkeypress="onkey(event)"/>
+<button onclick="send()">Send</button>
+<button onclick="quit()">Quit</button>
+</body>
+
+</html>
