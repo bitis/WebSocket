@@ -35,7 +35,10 @@ class WebSocket
                         $this->connect($client);
                     }
                 } else {
-                    $bytes = @socket_recv($socket, $buffer, 1024, 0);
+                    /**
+                     * todo 这里仅接收了 10240 bytes数据，如果给客户端发送数据超出这个范围，将会解码失败(接收到的数据不完整)。
+                     */
+                    $bytes = @socket_recv($socket, $buffer, 10240, 0);
                     if ($bytes == 0) {
                         $this->disconnect($socket);
                     } else {
@@ -150,15 +153,25 @@ class WebSocket
         }
     }
 
+    /**
+     * 解码消息
+     * todo 未按 https://tools.ietf.org/html/rfc6455#section-5.2 检查并关闭发送了`MASK`位为0数据帧的连接
+     *
+     * @param $buffer
+     * @return string
+     */
     function decode($buffer) {
         $decoded = '';
         $len = ord($buffer[1]) & 127;
         if ($len === 126) {
+            $len = (ord($buffer[2]) & 127) << 8 | ord($buffer[3]) & 127;
             $masks = substr($buffer, 4, 4);
-            $data = substr($buffer, 8);
+            $data = substr($buffer, 8, $len);
         } else if ($len === 127) {
+            $hex = unpack('H*', substr($buffer, 2,8));
+            $len = hexdec($hex[1]);
             $masks = substr($buffer, 10, 4);
-            $data = substr($buffer, 14);
+            $data = substr($buffer, 14, $len);
         } else {
             $masks = substr($buffer, 2, 4);
             $data = substr($buffer, 6);
