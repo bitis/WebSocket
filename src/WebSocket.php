@@ -47,7 +47,10 @@ class WebSocket
                         if (!$session->handshake) {
                             $this->handshake($session, $buffer);
                         } else {
-                            $this->process($socket, $this->decode($buffer));
+                            if ($this->is_masked($buffer))
+                                $this->process($socket, $this->decode($buffer));
+                            else
+                                $this->disconnect($socket);
                         }
                     }
                 }
@@ -153,14 +156,8 @@ class WebSocket
         }
     }
 
-    /**
-     * 解码消息
-     * todo 未按 https://tools.ietf.org/html/rfc6455#section-5.2 检查并关闭发送了`MASK`位为0数据帧的连接
-     *
-     * @param $buffer
-     * @return string
-     */
-    function decode($buffer) {
+    function decode($buffer)
+    {
         $decoded = '';
         $len = ord($buffer[1]) & 127;
         if ($len === 126) {
@@ -168,7 +165,7 @@ class WebSocket
             $masks = substr($buffer, 4, 4);
             $data = substr($buffer, 8, $len);
         } else if ($len === 127) {
-            $hex = unpack('H*', substr($buffer, 2,8));
+            $hex = unpack('H*', substr($buffer, 2, 8));
             $len = hexdec($hex[1]);
             $masks = substr($buffer, 10, 4);
             $data = substr($buffer, 14, $len);
@@ -185,7 +182,8 @@ class WebSocket
         return $decoded;
     }
 
-    function encode($msg) {
+    function encode($msg)
+    {
         $frame = [];
         $frame[0] = '81';
         $len = strlen($msg);
@@ -213,6 +211,10 @@ class WebSocket
         return pack("H*", $data);
     }
 
+    public function is_masked($buffer)
+    {
+        return boolval((ord($buffer[1]) & 0b11111111) >> 7);
+    }
 }
 
 class Session
