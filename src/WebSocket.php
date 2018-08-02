@@ -7,6 +7,13 @@ class WebSocket
     var $sessions = [];
     var $debug = false;
 
+    const READ_BUFF_SIZE = 1024;
+
+    /**
+     * WebSocket constructor.
+     * @param $address
+     * @param $port
+     */
     function __construct($address, $port)
     {
         $this->master = socket_create(AF_INET, SOCK_STREAM, SOL_TCP) or die("socket_create() failed");
@@ -35,20 +42,22 @@ class WebSocket
                         $this->connect($client);
                     }
                 } else {
-                    /**
-                     * todo 这里仅接收了 10240 bytes数据，如果给客户端发送数据超出这个范围，将会解码失败(接收到的数据不完整)。
-                     */
-                    $bytes = @socket_recv($socket, $buffer, 10240, 0);
+                    $data = null;
+                    do {
+                        $bytes = @socket_recv($socket, $buffer, self::READ_BUFF_SIZE, 0);
+                        $data .= $buffer;
+                    } while ($bytes == self::READ_BUFF_SIZE);
+
                     if ($bytes == 0) {
                         $this->disconnect($socket);
                     } else {
                         $session = $this->sessions[(int)$socket];
 
                         if (!$session->handshake) {
-                            $this->handshake($session, $buffer);
+                            $this->handshake($session, $data);
                         } else {
-                            if ($this->is_masked($buffer))
-                                $this->process($socket, $this->decode($buffer));
+                            if ($this->is_masked($data))
+                                $this->process($socket, $this->decode($data));
                             else
                                 $this->disconnect($socket);
                         }
@@ -112,8 +121,6 @@ class WebSocket
             "Connection: Upgrade\r\n" .
             'Sec-WebSocket-Accept: ' . $accept . "\r\n\r\n";
 
-        // 我CNMD，两个'\r\n'收尾
-
         socket_write($session->socket, $upgrade, strlen($upgrade));
 
         $session->handshake = true;
@@ -161,13 +168,15 @@ class WebSocket
         $decoded = '';
         $len = ord($buffer[1]) & 127;
         if ($len === 126) {
-            $len = (ord($buffer[2]) & 127) << 8 | ord($buffer[3]) & 127;
+            $len = (ord($buffer[2]) & 0xff) << 8 | ord($buffer[3]) & 0xff;
             $masks = substr($buffer, 4, 4);
+            $this->say($len);
             $data = substr($buffer, 8, $len);
         } else if ($len === 127) {
             $hex = unpack('H*', substr($buffer, 2, 8));
             $len = hexdec($hex[1]);
             $masks = substr($buffer, 10, 4);
+            $this->say($len);
             $data = substr($buffer, 14, $len);
         } else {
             $masks = substr($buffer, 2, 4);
